@@ -111,7 +111,7 @@ account acc@Account{..} mkAdditionalGroups = devop snd mkop $ do
              buildOp ("debian-account: " <> convertString accountName)
                      ("ensures that " <> convertString accountName <> " is a proper account.")
                      (raisesNot $ getUserEntryForName (Text.unpack accountName))
-                     (blindRun uadd (accountParams grps) "")
+                     (blindRun uadd (accountParams grps <> [convertString accountName]) "")
                      (blindRun udel [convertString accountName] "")
                      noAction
 
