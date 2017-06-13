@@ -116,8 +116,8 @@ account acc@Account{..} mkAdditionalGroups = devop snd mkop $ do
                      noAction
 
 uaddParams :: GroupName -> [GroupName] -> UserName -> [String]
-uaddParams grp [] u = ["-M", "-c", "user-added-via-devops", "-g", convertString grp, convertString u]
-uaddParams grp grps n = ["-M", "-G", convertString $ extraGroups grps,"-c", "user-added-via-devops", "-g", convertString grp, convertString n]
+uaddParams grp [] u = ["-M", "-s", "/bin/bash", "-c", "user-added-via-devops", "-g", convertString grp, convertString u]
+uaddParams grp grps n = ["-M", "-s", "/bin/bash","-G", convertString $ extraGroups grps,"-c", "user-added-via-devops", "-g", convertString grp, convertString n]
   where extraGroups gs = Text.intercalate "," gs
 
 type Ownership = (User,Group)
