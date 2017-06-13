@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -7,7 +8,8 @@ module Devops.Storage (
     FilePresent (..)
   , FileContent, FileLinked(..)
   , fileCopy , turnupfileBackup , turndownfileBackup , generatedFile , fileContent
-  , fileLink
+  , fileLink, dirLink
+  , touch
   , RepositoryFile (..) , localRepositoryFile
   , preExistingFile
   , DirectoryPresent (..) , directory , subdirectory
@@ -163,6 +165,38 @@ fileLink path mkSrc = devop id mkop $ do
                       (blindRemoveLink path)
                       noAction
 
+-- | Links a directory from an originally present directory
+dirLink :: FilePath -> DevOp DirectoryPresent -> DevOp (DirectoryPresent, FileLinked)
+dirLink path mkSrc = devop id mkop $ do
+    x@(DirectoryPresent srcPath) <- mkSrc
+    return (x, FileLinked srcPath path Nothing)
+  where
+    mkop ((DirectoryPresent srcPath),_) =
+              buildOp ("dir-linked: " <> Text.pack path)
+                      ("links " <> Text.pack path <> " at " <> Text.pack srcPath)
+                      (checkDirPresent path)
+                      (createSymbolicLink srcPath path)
+                      (blindRemoveLink path)
+                      noAction
+
+-- |Touch given path in directory, ensuring it exists
+touch :: DevOp DirectoryPresent -> FilePath -> DevOp FilePresent
+touch mkDir path = devop fst mkop $ do
+    DirectoryPresent dir <- mkDir
+    exe <- touchBin  -- assumes touch is installed in system
+    let file = dir </> path
+    return (FilePresent file, exe)
+    where
+      touchBin = binary :: DevOp (Binary "touch")
+      mkop (FilePresent fp, exe) =
+          buildOp ("file-exists: " <> Text.pack fp)
+          ("touch " <> Text.pack fp)
+          (checkFilePresent fp)
+          (blindRun exe [fp] "")
+          (blindRemoveLink fp)
+          noAction
+
+
 -- | Generates a file from an external command.
 --
 -- At the moment the external command should only produce a single file,
@@ -191,6 +225,10 @@ generatedFile path mkBinary mkArgs = devop fst mkOp $ do
 -- | Checks that a file is present.
 checkFilePresent :: FilePath -> IO CheckResult
 checkFilePresent = fmap fromBool . fileExist
+
+-- | Checks that a directory is present.
+checkDirPresent :: FilePath -> IO CheckResult
+checkDirPresent = fmap fromBool . doesDirectoryExist
 
 -- | Generates a file with an IO-action.
 ioFile :: FilePath

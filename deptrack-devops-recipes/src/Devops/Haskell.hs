@@ -8,7 +8,11 @@
 
 {-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
 
-module Devops.Haskell (StackProject, stackProject, stackInstall, stackPackage) where
+module Devops.Haskell (
+    -- * Installing Stack
+    installStack,
+    -- * Running Stack
+    StackProject, stackProject, stackInstall, stackPackage) where
 
 import           Control.Monad          (void)
 import           Data.Monoid            ((<>))
@@ -18,14 +22,15 @@ import           Data.Proxy             (Proxy (..))
 import           GHC.TypeLits           (KnownSymbol, Symbol, symbolVal)
 import           System.FilePath        ((</>))
 
-import           Devops.Binary          (Binary (..), HasBinary)
+import           Devops.Binary          (Binary (..), HasBinary, binary)
 import           Devops.Debian          (suRunAsInDir)
-import           Devops.Debian.Commands (git, stack)
+import           Devops.Debian.Commands (git, stack, wget)
 import           Devops.Debian.User     (User (..), userDirectory)
 import           Devops.Git             (GitBranch, GitRepo (..), GitUrl,
                                          gitClone)
-import           Devops.Storage         (DirectoryPresent (..), directory)
-import           Devops.Base            (DevOp, Name, noAction, noCheck, buildOp, devop)
+import           Devops.Storage         (DirectoryPresent (..), directory, fileExist)
+import           Devops.Base            (DevOp, Name, noAction, noCheck, buildOp, devop, fromBool)
+import           Devops.Utils           (blindRun, blindRunWithEnv)
 
 type PackageName = Name
 type TargetName = Name
@@ -46,6 +51,26 @@ data StackProject (a :: Symbol) = StackProject {
     stackProjectDir  :: !DirectoryPresent
   , stackProjectUser :: !User
   }
+
+-- |Install stack from official instructions from http://haskellstack.org
+-- Debianish packages are vastly out of date and the recommended way of installing stack is
+-- by downloading official installer and running it.
+installStack :: DevOp (Binary "stack")
+installStack = devop fst mkOp $ do
+    wg <- wget  -- debian specific
+    sh <- binary :: DevOp (Binary "sh") -- pure, asssumes /bin/sh is insstalled by default
+    return (Binary stackBin, (wg, sh))
+  where
+    stackBin = "/usr/local/bin/stack"
+    mkOp (_,(wg, sh)) = buildOp
+          ("install-stack: " <> Text.pack stackBin)
+          ("install stack from scratch")
+          (fromBool <$> fileExist stackBin)
+          (blindRun wg ["-O", "installstack.sh","https://get.haskellstack.org"] ""
+          >> blindRunWithEnv sh ["installstack.sh"] "" [("DEBIAN_FRONTEND", "noninteractive")])
+          (noAction)
+          (noAction)
+
 
 stackInstall ::
      (KnownSymbol bin, KnownSymbol pkg, HasBinary (StackProject pkg) bin)
