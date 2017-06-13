@@ -1,10 +1,12 @@
 {-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- TODO extract generic part to Devops.Unix ?
 module Devops.Debian.User (
     Group (..) , group
   , User (..) , user , mereUser
+  , Account (..), simpleAccount, account
   , preExistingGroup , preExistingUser
   , noExtraGroup
   , Ownership , filePermissions
@@ -74,6 +76,43 @@ user n mkBaseGroup mkGroups = devop snd mkop $ do
                      (raisesNot $ getUserEntryForName (Text.unpack n))
                      (blindRun uadd (uaddParams basegrp grps n) "")
                      (blindRun udel [convertString n] "")
+                     noAction
+
+data Account = Account { accountName :: UserName
+                       , accountShell :: FilePath
+                       , accountHome :: FilePath
+                       }
+               deriving (Show, Read)
+
+
+-- | Utility function to create simple account using bash as shell
+simpleAccount:: UserName -> DevOp User
+simpleAccount uname =
+    let acc = Account uname defaultShell (homeDirPath uname)
+        defaultShell = "/bin/bash"
+    in User . accountName <$> account acc (pure [])
+
+
+-- | Create a loging account for given `UserName`
+--
+-- This is different from `user` which merely ensures the `User` exists. This function creates a
+-- full login account, creating the user's home directory, setting its shell, creating a group...
+account :: Account -> DevOp [Group] -> DevOp Account
+account acc@Account{..} mkAdditionalGroups = devop snd mkop $ do
+  uadd <- useradd
+  udel <- userdel
+  grps <- map groupName <$> mkAdditionalGroups
+  return ((uadd, udel, grps), acc)
+  where
+    accountParams []   = [ "-m", "-c", "user-added-via-devops", "-U", "-s", accountShell, "-d", accountHome]
+    accountParams grps = accountParams [] ++ ["-G" , convertString $ Text.intercalate "," grps]
+    
+    mkop ((uadd, udel, grps), _) =
+             buildOp ("debian-account: " <> convertString accountName)
+                     ("ensures that " <> convertString accountName <> " is a proper account.")
+                     (raisesNot $ getUserEntryForName (Text.unpack accountName))
+                     (blindRun uadd (accountParams grps) "")
+                     (blindRun udel [convertString accountName] "")
                      noAction
 
 uaddParams :: GroupName -> [GroupName] -> UserName -> [String]
