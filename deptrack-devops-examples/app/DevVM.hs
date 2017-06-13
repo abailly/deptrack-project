@@ -22,7 +22,7 @@ import           Devops.Debian.Commands    (git)
 import           Devops.Debian.User        (Group (..), User (..),
                                             directoryPermissions, homeDirPath,
                                             mereUser, preExistingUser,
-                                            userDirectory)
+                                            userDirectory, simpleAccount)
 import           Devops.Git                (GitRepo (..), gitClone)
 import           Devops.Haskell            (installStack)
 import           Devops.Optimize           (optimizeDebianPackages)
@@ -82,7 +82,7 @@ stages (Local hn userKey)  self fixCall = void $ do
 
 exe               = "deptrack-devops-example-devbox"
 root              = preExistingUser "root"
-devUser           = mereUser "curry"
+devUser           = simpleAccount "curry"
 allIps            = "0.0.0.0"
 dropletConfig key = standardDroplet { size = G8, configImageSlug = ubuntuXenialSlug, keys = [key] }
 
