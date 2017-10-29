@@ -30,10 +30,12 @@ deriving instance Show (Node DOcean)
 instance HasResolver Remote (Node DOcean) where
   resolve k _ = runDOAuth False $ do
     -- assume k is the name of the droplet to resolve
-    droplets <- mapMaybe publicIP . findByIdOrName (unpack k) <$> listDroplets
-    case droplets of
-      (ip:_) -> return $ Remote (pack $ show ip)
-      []      -> fail $ "cannot resolve Remote for droplet with name " <> unpack k
+    ls <- listDroplets emptyQuery
+    case (mapMaybe publicIP . findByIdOrName (unpack k) <$> ls) of
+        Right droplets -> case droplets of
+                              (ip:_) -> return $ Remote (pack $ show ip)
+                              []      -> fail $ "cannot resolve Remote for droplet with name " <> unpack k
+        Left err      -> fail $ "cannot resolve Remote for droplet with name " <> unpack k <> ", got error: " <> show err
 
 
 ubuntuXenialSlug :: ImageSlug
@@ -64,16 +66,23 @@ droplet debug conf@BoxConfiguration{..} = devop id mkOp (pure $ Node $ DOcean co
 startDroplet :: Bool -> BoxConfiguration -> OpAction
 startDroplet debug conf = runDOAuth debug $ (createDroplet conf) >>= either (fail . show) (const $ return ())
 
+withDroplet :: String -> (Maybe Droplet -> Command IO a) -> Command IO a
+withDroplet dropletName f = do
+    ls <- listDroplets emptyQuery
+    case ls of
+        Right droplets -> f $ listToMaybe $ findByIdOrName dropletName $ droplets
+        Left err -> fail $ "cannot find droplet " <> dropletName <> ":  " <> show err
+        
 checkDropletExists :: Bool -> String -> OpCheck
 checkDropletExists debug dname = runDOAuth debug $ withDroplet dname $
   maybe (return $ Failure $ "no droplet with name " <> dname) (const $ return Success)
 
 killDroplet :: Bool -> String -> OpAction
 killDroplet debug dname = void $ runDOAuth debug $
-  withDroplet dname $ maybe (return Nothing) (destroyDroplet . dropletId)
-
-withDroplet :: String -> (Maybe Droplet -> Command IO a) -> Command IO a
-withDroplet dropletName f = (findByIdOrName dropletName <$> listDroplets) >>= f . listToMaybe
+  withDroplet dname $ maybe (return Nothing) (\ dr -> do
+                                                     res <- destroyDroplet (dropletId dr)
+                                                     either (\ err -> fail $ "cannot destroy droplet "<> dname <> ":  "<> show err) (pure . Just) res
+                                             )
 
 runDOAuth :: Bool -> Command IO a -> IO a
 runDOAuth True command = do
