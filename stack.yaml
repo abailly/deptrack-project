@@ -7,7 +7,7 @@ packages:
 - 'deptrack-devops-examples'
 - location:
     git: 'https://github.com/abailly/hdo.git'
-    commit: 'b2c365d'
+    commit: '8753774'
   extra-dep: true
 extra-deps:
 - 'dotgen-0.4.2'

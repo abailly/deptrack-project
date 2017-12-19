@@ -45,7 +45,7 @@ ubuntuXenialSlug =  "ubuntu-16-04-x64"
 -- This `BoxConfiguration` has 1GB of RAM, is deployed on `Ams2` region and has *no* ssh keys.
 -- it should probably be configured before being usable as a dependency.
 standardDroplet :: BoxConfiguration
-standardDroplet = BoxConfiguration "deptrack-default" (RegionSlug "ams2") G1 defaultImage [] False
+standardDroplet = BoxConfiguration "deptrack-default" (RegionSlug "ams2") (SizeSlug "1gb") defaultImage [] False
 
 -- | Describe a dependency on a DOcean droplet instance.
 --
@@ -72,7 +72,7 @@ withDroplet dropletName f = do
     case ls of
         Right droplets -> f $ listToMaybe $ findByIdOrName dropletName $ droplets
         Left err -> fail $ "cannot find droplet " <> dropletName <> ":  " <> show err
-        
+
 checkDropletExists :: Bool -> String -> OpCheck
 checkDropletExists debug dname = runDOAuth debug $ withDroplet dname $
   maybe (return $ Failure $ "no droplet with name " <> dname) (const $ return Success)
